@@ -3,7 +3,7 @@ CFLAGS:=-Wall -Wextra -std=c11 -pedantic -g -I./
 LIBS:=
 BIN=cc
 
-SRC:=main.c lexer.c trie.c parser.c
+SRC:=main.c lexer.c trie.c parser.c codegen.c
 OBJ:=${SRC:.c=.o}
 
 all: ${OBJ}

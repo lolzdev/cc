@@ -9,6 +9,12 @@
 #define TYPE_POINTER 0x100
 #define TYPE_MASK 0xff
 
+struct literal_pair {
+    char *literal;
+    size_t label;
+    struct literal_pair *next;
+};
+
 typedef enum op {
     OP_PLUS,
     OP_MINUS,
@@ -29,9 +35,13 @@ typedef enum ast_type {
     INTEGER,
     DECIMAL,
     ID,
+    STRING_LIT,
     UNARY,
     BINARY,
     FUNCTION,
+    VAR_DEF,
+    VAR_ASSIGN,
+    CALL,
 } ast_type_t;
 
 typedef enum expr_type {
@@ -63,6 +73,7 @@ typedef struct ast_node {
         uint64_t integer;
         double fl;
         char *identifier;
+        size_t string;
         struct {
             op_t op;
             struct ast_node *node;
@@ -88,6 +99,20 @@ typedef struct ast_statement {
             struct arg *args;
             struct block_member *block;
         } function;
+        struct {
+            expr_type_t ty;
+            char *identifier;
+            struct ast_statement *assignment; 
+        } var_def;
+        struct {
+            char *identifier;
+            ast_node_t *value;
+        } var_assign;
+        struct {
+            char *identifier;
+            size_t arg_count;
+            ast_node_t **args;
+        } call;
     } statement;
 } ast_statement_t;
 
@@ -96,14 +121,21 @@ struct block_member {
     struct block_member *next;
 };
 
+struct statement_list {
+    ast_statement_t *statement;
+    struct statement_list *next;
+};
+
 token_t *next(void);
 uint8_t check_token(token_type_t ty);
-ast_node_t *ast_parse(void);
+struct statement_list *ast_parse(void);
 ast_node_t *expression(void);
 ast_node_t *term(void);
 ast_node_t *factor(void);
 ast_statement_t *ast_statement(void);
 ast_statement_t *ast_function(void);
+ast_statement_t *ast_variable(void);
+ast_statement_t *ast_call(void);
 struct block_member*ast_block(void);
 expr_type_t ast_type(void);
 void ast_walk(ast_node_t *ast);

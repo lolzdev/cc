@@ -5,7 +5,7 @@
 
 struct trie {
     struct trie **children;
-    int32_t value;
+    int64_t value;
 };
 
 void trie_insert(struct trie *t, char *s, int32_t value);

@@ -5,6 +5,9 @@
 
 extern token_t *list;
 extern token_t *head;
+struct literal_pair *literals;
+struct literal_pair *literals_head;
+static size_t str_count;
 
 token_t *next(void)
 {
@@ -35,12 +38,21 @@ uint8_t check_token(token_type_t ty)
     return list->ty == ty;
 }
 
-ast_node_t *ast_parse(void)
+struct statement_list *ast_parse(void)
 {
     list = head;
     list = list->next;
-    ast_statement();
-    return expression();
+
+    struct statement_list *statements = (struct statement_list *) malloc(sizeof(struct statement_list));
+    struct statement_list *statements_head = statements;
+
+    while (list != NULL) {
+        statements->statement = ast_statement();
+        statements->next = (struct statement_list *) malloc(sizeof(struct statement_list));
+        statements = statements->next;
+    }
+
+    return statements_head;
 }
 
 ast_statement_t *ast_function(void)
@@ -56,10 +68,8 @@ ast_statement_t *ast_function(void)
     check_consume(L_PAREN);
     token_t *tmp = list;
     expr_type_t arg_type = ast_type();
-    printf("a: %d\n", arg_type);
     if ((arg_type & TYPE_MASK) == VOID_T) {
         if (arg_type & TYPE_POINTER) {
-            printf("a1: %d\n", arg_type);
             goto check_args;
         } else {
             check_consume(R_PAREN);
@@ -95,17 +105,12 @@ check_args:
         fn->statement.function.arg_count = 0;
     }
 
-    printf("t: %d\n", fn->statement.function.arg_count);
     if (check_consume(SEMICOLON)) {
         fn->statement.function.block = NULL;
     } else if (check_token(L_CURLY)) {
         fn->statement.function.block = ast_block();
     } else {
         // TODO: error
-    }
-
-    if (fn->statement.function.block != NULL && fn->statement.function.block->value != NULL) {
-        printf("%d\n", fn->statement.function.block->value->t);
     }
 
     return fn;
@@ -124,7 +129,7 @@ struct block_member *ast_block(void)
         return NULL;
     }
 
-    while (!check_token(R_CURLY)) {
+    while (!check_consume(R_CURLY)) {
         ast_statement_t *statement = ast_statement();
         if (block == NULL) {
             block = malloc(sizeof(struct block_member));
@@ -144,31 +149,113 @@ struct block_member *ast_block(void)
     return head;
 }
 
+ast_statement_t *ast_call(void)
+{
+    ast_statement_t *call = malloc(sizeof(ast_statement_t));
+    call->t = CALL;
+    if (!check_token(IDENTIFIER)) {
+        // TODO: error
+    }
+
+    call->statement.call.identifier = list->lexeme;
+    next();
+
+    size_t arg_count = 0;
+
+    if (!check_consume(L_PAREN)) {
+        // TODO: error
+    }
+
+    token_t *tmp = list;
+    while (!check_token(R_PAREN)) {
+        if (check_consume(COMMA)) {
+            arg_count += 1;
+        } else {
+            next();
+        }
+    }
+
+    list = tmp;
+    arg_count += 1;
+    call->statement.call.arg_count = arg_count;
+    call->statement.call.args = (ast_node_t **) malloc(sizeof(ast_node_t *) * arg_count);
+    ast_node_t **args = call->statement.call.args;
+
+    for (size_t i=0; !check_consume(R_PAREN); i++) {
+        args[i] = expression();
+
+        check_consume(COMMA);
+    }
+
+    if (!check_consume(SEMICOLON)) {
+        // TODO: error
+    }
+
+    return call;
+}
+
+ast_statement_t *ast_variable(void)
+{
+    ast_statement_t *var = (ast_statement_t *) malloc(sizeof(ast_statement_t));
+
+    var->t = VAR_DEF;
+    var->statement.var_def.ty = ast_type();
+    if (!check_token(IDENTIFIER)) {
+        // TODO: error
+    }
+
+    var->statement.var_def.identifier = list->lexeme;
+    next();
+
+    if (check_consume(ASSIGN)) {
+        ast_statement_t *assignment = (ast_statement_t *) malloc(sizeof(ast_statement_t));
+        assignment->t = VAR_ASSIGN;
+        assignment->statement.var_assign.identifier = var->statement.var_def.identifier;
+        assignment->statement.var_assign.value = expression();
+    }
+
+    if (!check_consume(SEMICOLON)) {
+        // TODO: error
+    }
+
+    return var;
+}
+
 ast_statement_t *ast_statement(void)
 {
     token_t *tmp = list;
-    switch (list->ty) {
-        case LONG:
-        case SHORT:
-        case UNSIGNED:
-        case CHAR:
-        case INT:
-        case FLOAT:
-        case DOUBLE:
-        case VOID: {
-            tmp = list;
-            ast_type();
-            check_consume(IDENTIFIER);
-            if (check_token(ASSIGN)) {
-                list = tmp;
-                // TODO: variable
-            } else if (check_token(L_PAREN)) {
-                list = tmp;
-                return ast_function();
-            }
+    if (check_consume(IDENTIFIER)) {
+        if (check_token(L_PAREN)) {
+            list = tmp;
+            return ast_call();
+        } else if (check_token(ASSIGN)) {
+            list = tmp;
+            // variable assignment
         }
-        default:
-            break;
+    } else {
+        switch (list->ty) {
+            case LONG:
+            case SHORT:
+            case UNSIGNED:
+            case CHAR:
+            case INT:
+            case FLOAT:
+            case DOUBLE:
+            case VOID: {
+                tmp = list;
+                ast_type();
+                check_consume(IDENTIFIER);
+                if (check_token(ASSIGN)) {
+                    list = tmp;
+                    return ast_variable();
+                } else if (check_token(L_PAREN)) {
+                    list = tmp;
+                    return ast_function();
+                }
+            }
+            default:
+                break;
+        }
     }
 }
 
@@ -214,6 +301,28 @@ ast_node_t *factor(void)
         ast_node_t *node = malloc(sizeof(ast_node_t));
         node->expr.integer = atoi(list->lexeme);
         node->ty = INTEGER;
+        next();
+
+        return node;
+    } else if (check_token(IDENTIFIER)) {
+        ast_node_t *node = malloc(sizeof(ast_node_t));
+        node->expr.identifier = list->lexeme;
+        node->ty = ID;
+        next();
+
+        return node;
+    } else if (check_token(STRING)) {
+        if (literals == NULL) {
+            literals = malloc(sizeof(struct literal_pair));
+            literals_head = literals;
+        }
+
+        literals->literal = list->lexeme;
+        literals->label = str_count;
+
+        ast_node_t *node = malloc(sizeof(ast_node_t));
+        node->expr.string = str_count;
+        node->ty = STRING_LIT;
         next();
 
         return node;
