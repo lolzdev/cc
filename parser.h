@@ -42,6 +42,7 @@ typedef enum ast_type {
     VAR_DEF,
     VAR_ASSIGN,
     CALL,
+    RETURN_STATEMENT,
 } ast_type_t;
 
 typedef enum expr_type {
@@ -113,11 +114,15 @@ typedef struct ast_statement {
             size_t arg_count;
             ast_node_t **args;
         } call;
+        struct {
+            ast_node_t *value;
+        } ret;
     } statement;
 } ast_statement_t;
 
 struct block_member {
     ast_statement_t *value;
+    size_t stack_size;
     struct block_member *next;
 };
 
@@ -136,8 +141,10 @@ ast_statement_t *ast_statement(void);
 ast_statement_t *ast_function(void);
 ast_statement_t *ast_variable(void);
 ast_statement_t *ast_call(void);
+ast_statement_t *ast_return(void);
 struct block_member*ast_block(void);
 expr_type_t ast_type(void);
+size_t ast_type_size(expr_type_t ty);
 void ast_walk(ast_node_t *ast);
 
 #endif

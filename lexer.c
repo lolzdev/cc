@@ -43,6 +43,7 @@ token_t *lexer_parse(char *source)
     trie_insert(&keywords, "float", FLOAT);
     trie_insert(&keywords, "double", DOUBLE);
     trie_insert(&keywords, "void", VOID);
+    trie_insert(&keywords, "return", RETURN);
     list = (token_t *) malloc(sizeof(token_t));
     head = list;
     bzero(list, sizeof(token_t));

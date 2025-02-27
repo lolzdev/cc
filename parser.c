@@ -5,7 +5,6 @@
 
 extern token_t *list;
 extern token_t *head;
-struct literal_pair *literals;
 struct literal_pair *literals_head;
 static size_t str_count;
 
@@ -60,6 +59,7 @@ ast_statement_t *ast_function(void)
     ast_statement_t *fn = malloc(sizeof(ast_statement_t));
     fn->t = FUNCTION;
     fn->statement.function.ty = ast_type();
+
     if (!check_token(IDENTIFIER)) {
         // TODO: error
     }
@@ -120,7 +120,7 @@ struct block_member *ast_block(void)
 {
     struct block_member *block = NULL;
     struct block_member *head = block;
-
+    size_t stack_size = 0;
     if (!check_consume(L_CURLY)) {
         // TODO: error
     }
@@ -131,6 +131,9 @@ struct block_member *ast_block(void)
 
     while (!check_consume(R_CURLY)) {
         ast_statement_t *statement = ast_statement();
+        if (statement->t == VAR_DEF) {
+            stack_size += ast_type_size(statement->statement.var_def.ty);
+        }
         if (block == NULL) {
             block = malloc(sizeof(struct block_member));
         }
@@ -142,10 +145,12 @@ struct block_member *ast_block(void)
         block->value = statement;
 
         block->next = malloc(sizeof(struct block_member));
+
         block = block->next;
         block->value = NULL;
     }
 
+    head->stack_size = stack_size;
     return head;
 }
 
@@ -212,6 +217,7 @@ ast_statement_t *ast_variable(void)
         assignment->t = VAR_ASSIGN;
         assignment->statement.var_assign.identifier = var->statement.var_def.identifier;
         assignment->statement.var_assign.value = expression();
+        var->statement.var_def.assignment = assignment;
     }
 
     if (!check_consume(SEMICOLON)) {
@@ -221,6 +227,18 @@ ast_statement_t *ast_variable(void)
     return var;
 }
 
+
+ast_statement_t *ast_return(void)
+{
+    ast_statement_t *value = (ast_statement_t *) malloc(sizeof(ast_statement_t));
+    value->t = RETURN_STATEMENT;
+    value->statement.ret.value = expression();
+    if (!check_consume(SEMICOLON)) {
+        // TODO: error
+    }
+    return value;
+}
+
 ast_statement_t *ast_statement(void)
 {
     token_t *tmp = list;
@@ -228,10 +246,9 @@ ast_statement_t *ast_statement(void)
         if (check_token(L_PAREN)) {
             list = tmp;
             return ast_call();
-        } else if (check_token(ASSIGN)) {
-            list = tmp;
-            // variable assignment
-        }
+        } 
+    } else if (check_consume(RETURN)) {
+        return ast_return();
     } else {
         switch (list->ty) {
             case LONG:
@@ -312,18 +329,22 @@ ast_node_t *factor(void)
 
         return node;
     } else if (check_token(STRING)) {
-        if (literals == NULL) {
-            literals = malloc(sizeof(struct literal_pair));
-            literals_head = literals;
-        }
+        struct literal_pair *literal = malloc(sizeof(struct literal_pair));
+        
+        
 
-        literals->literal = list->lexeme;
-        literals->label = str_count;
+        literal->literal = list->lexeme;
+        literal->label = str_count;
+        if (literals_head != NULL) {
+            literal->next = literals_head;
+        }
+        literals_head = literal;
 
         ast_node_t *node = malloc(sizeof(ast_node_t));
         node->expr.string = str_count;
         node->ty = STRING_LIT;
         next();
+        str_count++;
 
         return node;
     }
@@ -379,6 +400,38 @@ expr_type_t ast_type(void)
     }
 
     return res;
+}
+
+size_t ast_type_size(expr_type_t ty)
+{
+    switch(ty) {
+        case INT8:
+            return 1;
+        case INT16:
+            return 2;
+        case INT32:
+            return 4;
+        case INT64:
+            return 8;
+        case UINT8:
+            return 1;
+        case UINT16:
+            return 2;
+        case UINT32:
+            return 4;
+        case UINT64:
+            return 8;
+        case F32:
+            return 4;
+        case F64:
+            return 8;
+        case VOID_T:
+            return 0;
+        case STRUC:
+            return 0;
+        default:
+            return -1;
+    }
 }
 
 void ast_walk(ast_node_t *ast)

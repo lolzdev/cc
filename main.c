@@ -9,8 +9,11 @@ int main(void)
     token_t *l = lexer_parse(
             "int main(void)\n"
             "{\n"
-            "   write(0, \"hello world!\\n\", 13);\n"
-            "   write(0, \"hello world again!\\n\", 19);\n"
+            "   long int x = \"hi chat!\\n\";\n"
+            "   long int a = \"hi discord!\\n\";\n"
+            "   write(0, x, 10);\n"
+            "   write(0, a, 13);\n"
+            "   return 3;\n"
             "}"
     );
 

@@ -63,6 +63,7 @@ typedef enum token_type {
     FLOAT,
     DOUBLE,
     VOID,
+    RETURN,
     
     // special
     L_PAREN,
