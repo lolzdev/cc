@@ -56,7 +56,7 @@ void gen_block(FILE *f, struct block_member *block)
 void gen_assignment(FILE *f, ast_statement_t *assignment)
 {
     gen_mov(f, assignment->statement.var_assign.value, "r10");
-    fprintf(f, "mov %%r10, -%x(%rbp)\n", trie_get(variables, assignment->statement.var_assign.identifier));
+    fprintf(f, "mov %%r10, -%x(%%rbp)\n", trie_get(variables, assignment->statement.var_assign.identifier));
 }
 
 void gen_def(FILE *f, ast_statement_t *statement)
