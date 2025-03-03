@@ -2,6 +2,7 @@
 #include <stddef.h>
 #include <stdlib.h>
 #include <trie.h>
+#include <string.h>
 
 extern struct literal_pair *literals_head;
 
@@ -62,11 +63,11 @@ void gen_assignment(FILE *f, ast_statement_t *assignment)
 
 void gen_def(FILE *f, ast_statement_t *statement)
 {
+    printf("definition: %s, %x\n", statement->statement.var_def.identifier, variables);
     trie_insert(variables, statement->statement.var_def.identifier, base_offset);
     base_offset += ast_type_size(statement->statement.var_def.ty);
 
     if (statement->statement.var_def.assignment != NULL) {
-    printf("test\n");
         gen_assignment(f, statement->statement.var_def.assignment);
     }
 }
@@ -80,22 +81,36 @@ void gen_mov(FILE *f, ast_node_t *expr, char *reg)
     } else if (expr->ty == STRING_LIT) {
         fprintf(f, "mov $str%d, %%%s\n", expr->expr.string, reg);
     } else if (expr->ty == ID) {
+        printf("id: %s\n", expr->expr.identifier);
         fprintf(f, "mov -0x%x(%%rbp), %%%s\n", trie_get(variables, expr->expr.identifier), reg);
+    } else if (expr->ty == CALL) {
+        for (int i=0; i < expr->expr.call.arg_count; i++) {
+            gen_mov(f, expr->expr.call.args[i], call_regs[i]);
+        }
+
+        fprintf(f, "call %s\n", expr->expr.call.identifier);
+        fprintf(f, "mov %%rax, %%%s\n", reg);
     }
 }
 
-void gen_call(FILE *f, ast_statement_t *statement)
-{
-    for (int i=0; i < statement->statement.call.arg_count; i++) {
-        gen_mov(f, statement->statement.call.args[i], call_regs[i]);
-    }
+void gen_expr(FILE *f, ast_node_t *expr) {
+    if (expr->ty == CALL) {
+        for (int i=0; i < expr->expr.call.arg_count; i++) {
+            gen_mov(f, expr->expr.call.args[i], call_regs[i]);
+        }
 
-    fprintf(f, "call %s\n", statement->statement.call.identifier);
+        fprintf(f, "call %s\n", expr->expr.call.identifier);
+    }
 }
 
 void gen_function(FILE *f, ast_statement_t *statement)
 {
+    if (statement->statement.function.block == NULL) {
+        return;
+    }
+
     variables = (struct trie *) malloc(sizeof(struct trie));
+    memset(variables, 0x0, sizeof(struct trie));
 
     if (strcmp(statement->statement.function.identifier, "main") == 0) {
         main_function = 1;
@@ -109,6 +124,9 @@ void gen_function(FILE *f, ast_statement_t *statement)
     }
 
     free(variables);
+    if (statement->statement.function.ty == VOID_T) {
+        fprintf(f, "leave\nret\n");
+    }
 }
 
 void gen_return(FILE *f, ast_statement_t *statement)
@@ -134,8 +152,8 @@ void gen_statement(FILE *f, ast_statement_t *statement)
             gen_def(f, statement);
         } else if (ty == VAR_ASSIGN) {
             gen_assignment(f, statement);
-        } else if (ty == CALL) {
-            gen_call(f, statement);
+        } else if (ty == EXPRESSION) {
+            gen_expr(f, statement->statement.expression);
         } else if (ty == RETURN_STATEMENT) {
             gen_return(f, statement);
         }

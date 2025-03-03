@@ -2,11 +2,14 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <trie.h>
 
 extern token_t *list;
 extern token_t *head;
 struct literal_pair *literals_head;
 static size_t str_count;
+static struct trie functions;
+
 
 token_t *next(void)
 {
@@ -97,6 +100,7 @@ check_args:
                 args[i].identifier = NULL;
             } else {
                 args[i].identifier = list->lexeme;
+                next();
             }
 
             check_consume(COMMA);
@@ -109,12 +113,65 @@ check_args:
         fn->statement.function.block = NULL;
     } else if (check_token(L_CURLY)) {
         fn->statement.function.block = ast_block();
+    } else if (check_consume(SEMICOLON)) {
+        fn->statement.function.block = NULL;
     } else {
         // TODO: error
     }
 
+    trie_insert(&functions, fn->statement.function.identifier, fn->statement.function.ty);
+
     return fn;
 }
+
+// TODO: implement this
+/*
+ast_statement_t ast_asm(void)
+{
+    if (!check_consume(L_PAREN)) {
+        // TODO: error
+    }
+
+    ast_statement_t *inline_asm = (ast_statement_t *) malloc(sizeof(ast_statement_t));
+    inline_asm->t = INLINE_ASM;
+    if (!check_token(STRING)) {
+        // TODO: error
+    }
+    inline_asm->statement.asm.source = list->lexeme;
+    next();
+    
+    if (!check_consume(COLON)) {
+        // TODO: error
+    }
+
+    size_t value_count = 0;
+    token_t *tmp = list;
+    while (!check_token(R_PAREN)) {
+        if (check_consume(COMMA)) {
+            value_count += 1;
+        } else {
+            next();
+        }
+    }
+
+    list = tmp;
+    arg_count += 1;
+    inline_asm->statement.asm.value_count = arg_count;
+    inline_asm->statement.asm.values = (ast_node_t **) malloc(sizeof(ast_node_t *) * value_count);
+    ast_node_t **values = inline_asm->statement.asm.values;
+
+    for (size_t i=0; !check_consume(R_PAREN); i++) {
+        values[i] = expression();
+
+        check_consume(COMMA);
+    }
+
+    if (!check_consume(R_PAREN)) {
+        // TODO: error
+    }
+
+    return inline_asm;
+} */
 
 struct block_member *ast_block(void)
 {
@@ -154,15 +211,15 @@ struct block_member *ast_block(void)
     return head;
 }
 
-ast_statement_t *ast_call(void)
+ast_node_t *ast_call(void)
 {
-    ast_statement_t *call = malloc(sizeof(ast_statement_t));
-    call->t = CALL;
+    ast_node_t *call = malloc(sizeof(ast_node_t));
+    call->ty = CALL;
     if (!check_token(IDENTIFIER)) {
         // TODO: error
     }
 
-    call->statement.call.identifier = list->lexeme;
+    call->expr.call.identifier = list->lexeme;
     next();
 
     size_t arg_count = 0;
@@ -182,12 +239,15 @@ ast_statement_t *ast_call(void)
 
     list = tmp;
     arg_count += 1;
-    call->statement.call.arg_count = arg_count;
-    call->statement.call.args = (ast_node_t **) malloc(sizeof(ast_node_t *) * arg_count);
-    ast_node_t **args = call->statement.call.args;
+    call->expr.call.arg_count = arg_count;
+    call->expr.call.args = (ast_node_t **) malloc(sizeof(ast_node_t *) * arg_count);
+    ast_node_t **args = call->expr.call.args;
 
     for (size_t i=0; !check_consume(R_PAREN); i++) {
         args[i] = expression();
+        if (args[i]->ty == ID) {
+            printf("cid: %s\n", args[i]->expr.identifier);
+        }
 
         check_consume(COMMA);
     }
@@ -195,6 +255,8 @@ ast_statement_t *ast_call(void)
     if (!check_consume(SEMICOLON)) {
         // TODO: error
     }
+
+    call->expr_ty = trie_get(&functions, call->expr.call.identifier);
 
     return call;
 }
@@ -242,12 +304,7 @@ ast_statement_t *ast_return(void)
 ast_statement_t *ast_statement(void)
 {
     token_t *tmp = list;
-    if (check_consume(IDENTIFIER)) {
-        if (check_token(L_PAREN)) {
-            list = tmp;
-            return ast_call();
-        } 
-    } else if (check_consume(RETURN)) {
+    if (check_consume(RETURN)) {
         return ast_return();
     } else {
         switch (list->ty) {
@@ -269,10 +326,19 @@ ast_statement_t *ast_statement(void)
                     list = tmp;
                     return ast_function();
                 }
+                break;
             }
             default:
                 break;
         }
+
+        ast_statement_t *expr = (ast_statement_t *) malloc(sizeof(ast_statement_t));
+        expr->t = EXPRESSION;
+        expr->statement.expression = expression();
+        if (!check_consume(SEMICOLON)) {
+            // TODO: error
+        }
+        return expr;
     }
 }
 
@@ -314,6 +380,7 @@ ast_node_t *term(void)
 
 ast_node_t *factor(void)
 {
+    token_t *tmp = list;
     if (check_token(NUMBER)) {
         ast_node_t *node = malloc(sizeof(ast_node_t));
         node->expr.integer = atoi(list->lexeme);
@@ -321,7 +388,13 @@ ast_node_t *factor(void)
         next();
 
         return node;
-    } else if (check_token(IDENTIFIER)) {
+    } else if (check_consume(IDENTIFIER)) {
+        if (check_token(L_PAREN)) {
+            list = tmp;
+            return ast_call();
+        }
+        list = tmp;
+
         ast_node_t *node = malloc(sizeof(ast_node_t));
         node->expr.identifier = list->lexeme;
         node->ty = ID;
@@ -351,6 +424,7 @@ ast_node_t *factor(void)
 
     return NULL;
 }
+
 
 expr_type_t ast_type(void)
 {

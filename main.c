@@ -4,19 +4,24 @@
 #include <lexer.h>
 #include <codegen.h>
 
-int main(void)
+int main(int argc, char **argv)
 {
-    token_t *l = lexer_parse(
-            //"struct b {int a; int b; int c;}\n"
-            "int main(void)\n"
-            "{\n"
-            "   long int x = \"hi chat!\\n\";\n"
-            "   long int a = \"hi discord!\\n\";\n"
-            "   write(0, x, 10);\n"
-            "   write(0, a, 13);\n"
-            "   return 3;\n"
-            "}"
-    );
+    if (argc < 2) {
+        printf("Usage: cc [filename]\n");
+        exit(1);
+    }
+
+    FILE *source = fopen(argv[1], "r");
+    size_t size = 0;
+    fseek(source, 0, SEEK_END);
+    size = ftell(source);
+    fseek(source, 0, SEEK_SET);
+
+    char *buffer = (char *) malloc(size+1);
+    fread(buffer, size, 1, source);
+    buffer[size] = '\0';
+
+    token_t *l = lexer_parse(buffer);
 
     struct statement_list *ast = ast_parse();
     FILE *f = fopen("out.S", "w");

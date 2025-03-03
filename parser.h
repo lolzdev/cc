@@ -32,6 +32,7 @@ typedef enum op {
 } op_t;
 
 typedef enum ast_type {
+    EXPRESSION,
     INTEGER,
     DECIMAL,
     ID,
@@ -43,6 +44,7 @@ typedef enum ast_type {
     VAR_ASSIGN,
     CALL,
     RETURN_STATEMENT,
+    INLINE_ASM,
 } ast_type_t;
 
 typedef enum expr_type {
@@ -85,6 +87,11 @@ typedef struct ast_node {
             struct ast_node *right;
             op_t op;
         } binary;
+        struct {
+            char *identifier;
+            size_t arg_count;
+            struct ast_node **args;
+        } call;
     } expr;
 } ast_node_t;
 
@@ -109,14 +116,16 @@ typedef struct ast_statement {
             char *identifier;
             ast_node_t *value;
         } var_assign;
-        struct {
-            char *identifier;
-            size_t arg_count;
-            ast_node_t **args;
-        } call;
+        
         struct {
             ast_node_t *value;
         } ret;
+        struct {
+            char *source;
+            size_t value_count;
+            ast_node_t **values;
+        } asm;
+        ast_node_t *expression;
     } statement;
 } ast_statement_t;
 
@@ -137,10 +146,10 @@ struct statement_list *ast_parse(void);
 ast_node_t *expression(void);
 ast_node_t *term(void);
 ast_node_t *factor(void);
+ast_node_t *ast_call(void);
 ast_statement_t *ast_statement(void);
 ast_statement_t *ast_function(void);
 ast_statement_t *ast_variable(void);
-ast_statement_t *ast_call(void);
 ast_statement_t *ast_return(void);
 struct block_member*ast_block(void);
 expr_type_t ast_type(void);

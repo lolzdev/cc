@@ -64,6 +64,7 @@ typedef enum token_type {
     DOUBLE,
     VOID,
     RETURN,
+    ASM,
     
     // special
     L_PAREN,
