@@ -7,6 +7,7 @@
 int main(void)
 {
     token_t *l = lexer_parse(
+            //"struct b {int a; int b; int c;}\n"
             "int main(void)\n"
             "{\n"
             "   long int x = \"hi chat!\\n\";\n"

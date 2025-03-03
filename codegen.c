@@ -10,6 +10,7 @@ static const char *call_regs[] = {
 };
 
 static struct scope *scope_stack = NULL;
+static int main_function = 0;
 
 struct trie *variables = NULL;
 static size_t str_count = 0;
@@ -96,9 +97,12 @@ void gen_function(FILE *f, ast_statement_t *statement)
 {
     variables = (struct trie *) malloc(sizeof(struct trie));
 
+    if (strcmp(statement->statement.function.identifier, "main") == 0) {
+        main_function = 1;
+    }
     fprintf(f, "%s:\n", statement->statement.function.identifier);
     fprintf(f, "push %%rbp\n");
-    fprintf(f, "mov %rsp, %rbp\n");
+    fprintf(f, "mov %%rsp, %%rbp\n");
     if (statement->statement.function.block != NULL) {
         fprintf(f, "sub $0x%x, %%rsp\n", statement->statement.function.block->stack_size);
         gen_block(f, statement->statement.function.block);
@@ -109,8 +113,15 @@ void gen_function(FILE *f, ast_statement_t *statement)
 
 void gen_return(FILE *f, ast_statement_t *statement)
 {
-    gen_mov(f, statement->statement.ret.value, "rax");
-    fprintf(f, "leave\nret\n");
+    if (main_function) {
+        main_function = 0;
+        fprintf(f, "leave\n");
+        gen_mov(f, statement->statement.ret.value, "rdi");
+        fprintf(f, "mov $0x3c, %%rax\nsyscall\n");
+    } else {
+        gen_mov(f, statement->statement.ret.value, "rax");
+        fprintf(f, "leave\nret\n");
+    }
 }
 
 void gen_statement(FILE *f, ast_statement_t *statement)

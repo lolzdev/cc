@@ -1,0 +1,24 @@
+.data
+str1: .asciz "hi discord!\n"
+str0: .asciz "hi chat!\n"
+.text
+.global main
+main:
+push %rbp
+sub $0x10, %rsp
+mov $str0, %r10
+mov %r10, -0(%rbp)
+mov $str1, %r10
+mov %r10, -8(%rbp)
+mov $0, %rdi
+mov -0x0(%rbp), %rsi
+mov $10, %rdx
+call write
+mov $0, %rdi
+mov -0x8(%rbp), %rsi
+mov $13, %rdx
+call write
+leave
+mov $0x3c, %rax
+mov $3, %rdi
+syscall
