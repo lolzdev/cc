@@ -69,6 +69,9 @@ ast_statement_t *ast_function(void)
     fn->statement.function.identifier = list->lexeme;
     next();
     check_consume(L_PAREN);
+
+    size_t stack_size = 0;
+
     token_t *tmp = list;
     expr_type_t arg_type = ast_type();
     if ((arg_type & TYPE_MASK) == VOID_T) {
@@ -94,8 +97,10 @@ check_args:
         fn->statement.function.args = (struct arg *) malloc(sizeof(struct arg) * arg_count);
         struct arg *args = fn->statement.function.args;
 
+        list = tmp;
         for (size_t i=0; !check_consume(R_PAREN); i++) {
             args[i].ty = ast_type();
+            stack_size += ast_type_size(args[i].ty);
             if (!check_token(IDENTIFIER)) {
                 args[i].identifier = NULL;
             } else {
@@ -113,6 +118,7 @@ check_args:
         fn->statement.function.block = NULL;
     } else if (check_token(L_CURLY)) {
         fn->statement.function.block = ast_block();
+        fn->statement.function.block->stack_size += stack_size;
     } else if (check_consume(SEMICOLON)) {
         fn->statement.function.block = NULL;
     } else {
@@ -245,9 +251,6 @@ ast_node_t *ast_call(void)
 
     for (size_t i=0; !check_consume(R_PAREN); i++) {
         args[i] = expression();
-        if (args[i]->ty == ID) {
-            printf("cid: %s\n", args[i]->expr.identifier);
-        }
 
         check_consume(COMMA);
     }

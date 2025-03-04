@@ -63,7 +63,6 @@ void gen_assignment(FILE *f, ast_statement_t *assignment)
 
 void gen_def(FILE *f, ast_statement_t *statement)
 {
-    printf("definition: %s, %x\n", statement->statement.var_def.identifier, variables);
     trie_insert(variables, statement->statement.var_def.identifier, base_offset);
     base_offset += ast_type_size(statement->statement.var_def.ty);
 
@@ -81,7 +80,6 @@ void gen_mov(FILE *f, ast_node_t *expr, char *reg)
     } else if (expr->ty == STRING_LIT) {
         fprintf(f, "mov $str%d, %%%s\n", expr->expr.string, reg);
     } else if (expr->ty == ID) {
-        printf("id: %s\n", expr->expr.identifier);
         fprintf(f, "mov -0x%x(%%rbp), %%%s\n", trie_get(variables, expr->expr.identifier), reg);
     } else if (expr->ty == CALL) {
         for (int i=0; i < expr->expr.call.arg_count; i++) {
@@ -90,6 +88,23 @@ void gen_mov(FILE *f, ast_node_t *expr, char *reg)
 
         fprintf(f, "call %s\n", expr->expr.call.identifier);
         fprintf(f, "mov %%rax, %%%s\n", reg);
+    } else if (expr->ty == BINARY) {
+        gen_mov(f, expr->expr.binary.left, "r15");
+        gen_mov(f, expr->expr.binary.right, reg);
+        switch (expr->expr.binary.op) {
+            case OP_PLUS:
+                fprintf(f, "add %%r15, %%%s\n", reg);
+                break;
+            case OP_MINUS:
+                fprintf(f, "sub %%r15, %%%s\n", reg);
+                break;
+            case OP_STAR:
+                fprintf(f, "mul %%r15, %%%s\n", reg);
+                break;
+            case OP_SLASH:
+                fprintf(f, "div %%r15, %%%s\n", reg);
+                break;
+        }
     }
 }
 
@@ -111,15 +126,26 @@ void gen_function(FILE *f, ast_statement_t *statement)
 
     variables = (struct trie *) malloc(sizeof(struct trie));
     memset(variables, 0x0, sizeof(struct trie));
+    base_offset = 0;
 
     if (strcmp(statement->statement.function.identifier, "main") == 0) {
         main_function = 1;
     }
+
+    
+
     fprintf(f, "%s:\n", statement->statement.function.identifier);
-    fprintf(f, "push %%rbp\n");
     fprintf(f, "mov %%rsp, %%rbp\n");
     if (statement->statement.function.block != NULL) {
         fprintf(f, "sub $0x%x, %%rsp\n", statement->statement.function.block->stack_size);
+
+        for (int i=0; i < statement->statement.function.arg_count; i++) {
+            struct arg a = statement->statement.function.args[i];
+            trie_insert(variables, a.identifier, base_offset);
+            fprintf(f, "mov %%%s, -%x(%%rbp)\n", call_regs[i], base_offset);
+            base_offset += ast_type_size(a.ty);
+        }
+
         gen_block(f, statement->statement.function.block);
     }
 
